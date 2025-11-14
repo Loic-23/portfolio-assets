@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Portfolio Scene</title>
+<style>
+  html,body{margin:0;height:100%;background:#fff;overflow:hidden}
+  #stage{width:100%;height:100vh;position:relative}
+  #dbg{position:absolute;left:10px;bottom:10px;padding:6px 10px;border-radius:8px;
+       background:rgba(0,0,0,.06);color:#222;font:12px system-ui;z-index:10;white-space:pre-wrap;max-width:86vw}
+  canvas{display:block;width:100%;height:100%}
+</style>
+
+<div id="stage"><div id="dbg">init…</div></div>
+
+<!-- Nicht-Modul Builds: robust in Safari & iframes -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+(function(){
+  const dbg = document.getElementById('dbg');
+  const log = m => dbg.textContent = m;
+  const add = m => dbg.textContent += "\\n" + m;
+
+  if (!window.THREE){ log('Fehler: THREE nicht geladen.'); return; }
+  if (!THREE.GLTFLoader){ log('Fehler: GLTFLoader nicht geladen.'); return; }
+
+  const GLB_URLS = [
+    'https://cdn.jsdelivr.net/gh/Loic-23/portfolio-assets@main/Test5.glb',
+    'https://raw.githubusercontent.com/Loic-23/portfolio-assets/master/Test5.glb'
+  ];
+
+  const stage = document.getElementById('stage');
+  const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
+
+  const camera = new THREE.PerspectiveCamera(80, stage.clientWidth/stage.clientHeight, 0.1, 5000);
+  scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+  // Proof-Würfel, damit du sofort siehst: Renderloop läuft
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(10,10,10), new THREE.MeshNormalMaterial());
+  cube.position.set(0,0,-80);
+  scene.add(cube);
+
+  // Interaktion
+  const SCROLL_GAIN=0.00006, VEL_EASE=0.12, VEL_MAX=0.0035, VEL_STOP_EPS=1e-6, NO_WHEEL_TIMEOUT=140, AHEAD_T=0.0045;
+  const YAW_MAX=Math.PI/2, PITCH_MAX=100*Math.PI/180, YAW_GAMMA=1.25, PITCH_GAMMA=1.35, LOOK_EASE=0.18;
+  const HOVER_MAX_DIST=35, HOVER_SCALE=1.15;
+
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  const wrap01=t=>{t%=1; return t<0?t+1:t;};
+  const powSigned=(n,g)=> (n<0?-1:1) * Math.pow(Math.abs(n), g);
+  const lc=s=>(s||'').toLowerCase();
+
+  let pathCurve=null; const phMeshes=[];
+  let u=0, vel=0, velTarget=0, lastWheelAt=0;
+  let yawAngle=0, pitchAngle=0, yawTarget=0, pitchTarget=0;
+  const pointer={x:0,y:0};
+
+  stage.addEventListener('wheel', e=>{
+    e.preventDefault();
+    if (e.ctrlKey||e.metaKey) return;
+    const dy=e.deltaY||0;
+    if (Math.abs(dy)<0.01) return;
+    lastWheelAt=performance.now();
+    velTarget=clamp(velTarget + dy*SCROLL_GAIN, -VEL_MAX, VEL_MAX);
+  }, {passive:false});
+
+  // iOS/Safari Pinch verhindern
+  addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
+  addEventListener('gesturechange', e=>e.preventDefault(), {passive:false});
+  addEventListener('gestureend', e=>e.preventDefault(), {passive:false});
+
+  stage.addEventListener('mousemove', e=>{
+    const r=renderer.domElement.getBoundingClientRect();
+    pointer.x=((e.clientX-r.left)/r.width)*2-1;
+    pointer.y=((e.clientY-r.top )/r.height)*2-1;
+  }, {passive:true});
+
+  const ray=new THREE.Raycaster(); ray.near=0.1; ray.far=HOVER_MAX_DIST; let hovered=null;
+
+  const loader = new THREE.GLTFLoader(); loader.setCrossOrigin('anonymous');
+
+  function closedCurveFromPoints(pts){
+    if (!pts || !pts.length) return null;
+    const last=pts[pts.length-1];
+    if (pts.length>2 && pts[0].distanceTo(last)<1e-5) pts=pts.slice(0,-1);
+    return new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.15);
+  }
+
+  function loadGLB(idx){
+    if (idx>=GLB_URLS.length){ add('GLB: alle Quellen fehlgeschlagen → Fallback-Kreis.'); makeFallbackCurve(); return; }
+    const url=GLB_URLS[idx];
+    add('GLB laden … ' + url);
+    loader.load(url, onGLB, undefined, err=>{ add('GLB-Fehler: '+(err?.message||'unbekannt')); loadGLB(idx+1); });
+  }
+
+  function onGLB(gltf){
+    add('GLB geladen ✓');
+    const root=gltf.scene; scene.add(root); root.updateWorldMatrix(true,true);
+
+    // Pfad über PATH_###
+    let empties=[]; root.traverse(o=>{ const m=/^PATH_(\d+)/i.exec(o.name||''); if(m) empties.push({i:+m[1],obj:o}); });
+    if (empties.length){
+      empties.sort((a,b)=>a.i-b.i);
+      const pts=empties.map(n=> n.obj.getWorldPosition(new THREE.Vector3()));
+      pathCurve=closedCurveFromPoints(pts);
+      add('Pfad: Empties ✓');
+    }
+
+    // Fallback: erstes Mesh/Line mit Kurvennamen
+    if (!pathCurve){
+      let pathObj=null;
+      root.traverse(o=>{
+        const n=lc(o.name);
+        if (!pathObj && (o.isMesh||o.isLine) && (n.includes('bezier')||n.includes('curve')||n.includes('path')||n.includes('circle'))) pathObj=o;
+      });
+      if (pathObj?.geometry?.attributes?.position){
+        const pos=pathObj.geometry.attributes.position, v=new THREE.Vector3(), pts=[];
+        pathObj.updateWorldMatrix(true,false);
+        for (let i=0;i<pos.count;i++){ v.fromBufferAttribute(pos,i).applyMatrix4(pathObj.matrixWorld); pts.push(v.clone()); }
+        pathCurve=closedCurveFromPoints(pts);
+        add('Pfad: Geometrie ✓');
+      }
+    }
+
+    if (!pathCurve){ add('Kein Pfad → Fallback-Kreis.'); makeFallbackCurve(); }
+    else add('Pfad aktiv (Loop).');
+
+    // Platzhalter (schwarz), Pose aus GLB
+    root.traverse(o=>{
+      const nm=o.name||''; if(!/^P_/i.test(nm)) return;
+      const pos=new THREE.Vector3(), quat=new THREE.Quaternion(), scl=new THREE.Vector3();
+      o.updateWorldMatrix(true,false); o.matrixWorld.decompose(pos,quat,scl);
+
+      let mesh;
+      if (o.isMesh && o.geometry){
+        mesh = new THREE.Mesh(o.geometry.clone(), new THREE.MeshBasicMaterial({ color:0x222222, side:THREE.DoubleSide }));
+      } else {
+        const geo=new THREE.PlaneGeometry(4,3);
+        mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color:0x222222, side:THREE.DoubleSide }));
+        if (o.scale){
+          const avg=(o.scale.x+o.scale.y+o.scale.z)/3 || 1;
+          mesh.scale.multiplyScalar(avg);
+        }
+      }
+      mesh.position.copy(pos);
+      mesh.quaternion.copy(quat);
+      mesh.scale.multiply(scl);
+      mesh.userData.base = mesh.scale.clone();
+
+      o.visible=false;
+      scene.add(mesh);
+      phMeshes.push(mesh);
+    });
+
+    // Startkamera & Würfel aus
+    if (pathCurve){
+      const p0=pathCurve.getPointAt(0);
+      camera.position.copy(p0);
+      camera.lookAt(p0.clone().add(pathCurve.getTangentAt(0)));
+      cube.visible=false;
+    }
+  }
+
+  function makeFallbackCurve(){
+    pathCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-120,-40,160),
+      new THREE.Vector3(-60,20,80),
+      new THREE.Vector3(0,0,0),
+      new THREE.Vector3(40,-20,-80),
+      new THREE.Vector3(90,30,-160)
+    ], true, 'catmullrom', 0.15);
+  }
+
+  // Loop
+  let lastTime=performance.now();
+  function animate(){
+    requestAnimationFrame(animate);
+    const now=performance.now(); const dt=Math.min(0.05,(now-lastTime)/1000); lastTime=now;
+
+    if (cube.visible){ cube.rotation.x+=0.01; cube.rotation.y+=0.02; }
+
+    if (now - lastWheelAt > NO_WHEEL_TIMEOUT) velTarget = 0;
+    vel += (velTarget - vel) * VEL_EASE;
+    if (Math.abs(vel) < VEL_STOP_EPS && velTarget === 0) vel = 0;
+    u = wrap01(u + vel);
+
+    if (pathCurve){
+      const p  = pathCurve.getPointAt(u);
+      const pa = pathCurve.getPointAt(wrap01(u + AHEAD_T));
+      const forward = pa.clone().sub(p).normalize();
+      const WORLD_UP = new THREE.Vector3(0,1,0);
+
+      const yawT   = clamp( YAW_MAX   * powSigned(-pointer.x, YAW_GAMMA),   -YAW_MAX,   YAW_MAX );
+      const pitchT = clamp( PITCH_MAX * powSigned(-pointer.y, PITCH_GAMMA), -PITCH_MAX, PITCH_MAX );
+      yawAngle   += (yawT   - yawAngle)   * LOOK_EASE;
+      pitchAngle += (pitchT - pitchAngle) * LOOK_EASE;
+
+      const qYaw = new THREE.Quaternion().setFromAxisAngle(WORLD_UP, yawAngle);
+      const yawedForward = forward.clone().applyQuaternion(qYaw);
+      const right = new THREE.Vector3().crossVectors(yawedForward, WORLD_UP).normalize();
+      const qPitch = new THREE.Quaternion().setFromAxisAngle(right, pitchAngle);
+      const look = yawedForward.clone().applyQuaternion(qPitch).normalize();
+
+      camera.position.copy(p);
+      camera.lookAt(p.clone().add(look));
+    }
+
+    // Hover (nahe)
+    ray.setFromCamera({x:0,y:0}, camera);
+    const hits = ray.intersectObjects(phMeshes,false);
+    let hit=null;
+    for (let i=0;i<hits.length;i++){ if (hits[i].distance<=HOVER_MAX_DIST){ hit=hits[i].object; break; } }
+    if (hit !== hovered){
+      if (hovered) hovered.scale.copy(hovered.userData.base);
+      hovered = hit;
+      if (hovered) hovered.scale.copy(hovered.userData.base).multiplyScalar(HOVER_SCALE);
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  log('Init ✓ – Prüfe Laden & Render…');
+  animate();
+  loadGLB(0);
+
+  addEventListener('resize', ()=>{
+    renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+    camera.aspect = stage.clientWidth/stage.clientHeight;
+    camera.updateProjectionMatrix();
+  });
+
+  addEventListener('error', e=>add('JS-Fehler: '+e.message));
+  addEventListener('unhandledrejection', e=>add('Promise-Fehler: '+(e.reason?.message||e.reason)));
+})();
+</script>
+</html>
