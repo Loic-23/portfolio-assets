@@ -1,0 +1,112 @@
+:root {
+    --carousel-height: 850px;
+    --item-width: var(--carousel-height); /* 1:1 Format */
+    --item-height: var(--carousel-height);
+    --item-spacing: 200px; /* Abstand im 3D-Raum */
+    --perspective-depth: 1200px;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Verhindert Scrollbalken */
+    background-color: #f0f0f0;
+}
+
+/* Hauptcontainer für Breite und Höhe */
+.carousel-container {
+    width: 100%;
+    height: var(--carousel-height);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Bühne: Definiert die 3D-Perspektive */
+.carousel-stage {
+    width: 100%;
+    height: 100%;
+    perspective: var(--perspective-depth); /* Die Tiefe des 3D-Raums */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Das Karussell-Element, das rotiert wird */
+.carousel {
+    position: absolute;
+    width: var(--item-width);
+    height: var(--item-height);
+    transform-style: preserve-3d; /* Wichtig für 3D-Effekte der Kinder */
+    transition: transform 0.6s ease-in-out; /* Übergang für Rotation */
+}
+
+/* Die einzelnen Bild-Platzhalter */
+.carousel-item {
+    position: absolute;
+    width: var(--item-width);
+    height: var(--item-height);
+    background-color: #A0A0A0; /* Grauer Platzhalter */
+    border: 2px solid #555;
+    /* Zentriert die Elemente in der 3D-Bühne */
+    left: 50%;
+    top: 50%;
+    margin-left: calc(-1 * var(--item-width) / 2);
+    margin-top: calc(-1 * var(--item-height) / 2);
+    
+    /* 3D-Transform: Positionierung der Bilder */
+    opacity: 0.8;
+    transition: transform 0.6s ease-in-out, opacity 0.6s ease-in-out;
+}
+
+/* ---- 3D-Positionierung der Elemente (Basis-Setup für 5 Items) ---- */
+
+/* Mittleres Bild: Ganz zu sehen, vorne */
+.carousel-item[data-index="0"] {
+    transform: translateZ(calc(var(--perspective-depth) / 4));
+    opacity: 1;
+}
+
+/* Rechtes Bild: Etwas schräg und weiter hinten */
+.carousel-item[data-index="1"] {
+    transform: translateX(var(--item-width)) rotateY(-45deg) translateZ(calc(var(--perspective-depth) / 6));
+}
+
+/* Linkes Bild: Etwas schräg und weiter hinten */
+.carousel-item[data-index="-1"] {
+    transform: translateX(calc(-1 * var(--item-width))) rotateY(45deg) translateZ(calc(var(--perspective-depth) / 6));
+}
+
+/* Die ganz äußeren Bilder (optional, falls Sie mehr als 3 zeigen wollen) */
+.carousel-item[data-index="2"],
+.carousel-item[data-index="-2"] {
+    opacity: 0; /* Versteckt */
+    transform: translateZ(calc(-1 * var(--perspective-depth) / 2));
+}
+
+
+/* ---- Navigationspfeile ---- */
+
+.nav-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.4);
+    color: white;
+    border: none;
+    padding: 20px 15px;
+    font-size: 30px;
+    cursor: pointer;
+    line-height: 1;
+    height: 850px; /* Höhe wie Karussell */
+    display: flex;
+    align-items: center;
+}
+
+.prev-button {
+    left: 0;
+}
+
+.next-button {
+    right: 0;
+}
