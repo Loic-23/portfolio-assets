@@ -1,0 +1,27 @@
+{
+  "base": "assets/img/meetingpoint",
+  "files": [
+    "meetingpoint01.mp4",
+    "meetingpoint01.webm",
+    "meetingpoint02.mp4",
+    "meetingpoint02.webm",
+    "meetingpoint03.mp4",
+    "meetingpoint03.webm",
+    "meetingpoint04.mp4",
+    "meetingpoint04.webm",
+    "meetingpoint05.mp4",
+    "meetingpoint05.webm",
+    "meetingpoint06.mp4",
+    "meetingpoint06.webm",
+    "meetingpoint07.mp4",
+    "meetingpoint07.webm",
+    "meetingpoint08.mp4",
+    "meetingpoint08.webm",
+    "meetingpoint09.mp4",
+    "meetingpoint09.webm",
+    "meetingpoint10.mp4",
+    "meetingpoint10.webm",
+    "meetingpoint11.mp4",
+    "meetingpoint11.webm"
+  ]
+}
