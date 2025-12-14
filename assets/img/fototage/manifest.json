@@ -1,0 +1,17 @@
+{
+  "base": "assets/img/fototage",
+  "files": [
+    "Auge.mp4",
+    "Auge.webm",
+    "O_L.mp4",
+    "O_L.webm",
+    "O_R.mp4",
+    "O_R.webm",
+    "U.mp4",
+    "U.webm",
+    "U_L.mp4",
+    "U_L.webm",
+    "U_R.mp4",
+    "U_R.webm"
+  ]
+}
