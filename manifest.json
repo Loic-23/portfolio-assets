@@ -1,29 +1,6 @@
 {
-  "base": "assets/img/javelin",
+  "base": "assets/img/a",
   "files": [
-    "javelin01.webp",
-    "javelin02.webp",
-    "javelin03.webp",
-    "javelin04.webp",
-    "javelin05.webp",
-    "javelin06.webp",
-    "javelin07.webp",
-    "javelin08.webp",
-    "javelin09.webp",
-    "javelin10.webp",
-    "javelin11.webp",
-    "javelin12.webp",
-    "javelin13.webp",
-    "javelin14.webp",
-    "javelin15.webp",
-    "javelin16.webp",
-    "javelin17.webp",
-    "javelin18.webp",
-    "javelin19.webp",
-    "javelin20.webp",
-    "javelin21.webp",
-    "javelin22.webp",
-    "javelin23.webp",
-    "javelin24.webp"
+    "SpaceGrotesk[wght].woff2"
   ]
 }
